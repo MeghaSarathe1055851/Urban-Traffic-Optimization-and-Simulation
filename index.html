@@ -1,0 +1,556 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Urban Traffic Simulation</title>
+    <script src="/static/plotly-latest.min.js"></script>
+    <script>window.Plotly || document.write('<script src="https://cdn.plot.ly/plotly-latest.min.js"><\/script>')</script>
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #1a1a1a;
+            color: white;
+            margin: 0;
+            padding: 0;
+            display: flex;
+            height: 100vh;
+            overflow: hidden;
+        }
+        .controls-left, .controls-right {
+            width: 300px;
+            background-color: #333;
+            padding: 20px;
+            border-radius: 0 10px 10px 0;
+            height: 100vh;
+            overflow-y: auto;
+            flex-shrink: 0;
+        }
+        .controls-left {
+            border-radius: 10px 0 0 10px;
+        }
+        .graph {
+            flex-grow: 1;
+            width: calc(100vw - 600px);
+            height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: stretch;
+        }
+        #graph {
+            width: 100%;
+            height: 100%;
+            flex: 1;
+            min-width: 0;
+            min-height: 0;
+        }
+        h2 {
+            color: #39FF14;
+            margin-top: 0;
+        }
+        label, select, input, button {
+            display: block;
+            width: 100%;
+            margin-bottom: 10px;
+        }
+        select, input {
+            padding: 5px;
+            background-color: #555;
+            color: white;
+            border: none;
+            border-radius: 5px;
+        }
+        button {
+            padding: 10px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+        #calculatePath {
+            background-color: #39FF14;
+            color: black;
+        }
+        #closeRoad {
+            background-color: #FF4500;
+            color: white;
+        }
+        #updateWeight, #addEdge, #addNode, #checkEdgeWeight {
+            background-color: #FFD700;
+            color: black;
+        }
+        #removeNode {
+            background-color: #FF4500;
+            color: white;
+        }
+        #toggleLabels {
+            background-color: #1E90FF;
+            color: white;
+        }
+        #pathResult, #message {
+            margin-top: 20px;
+            padding: 10px;
+            background-color: #444;
+            border-radius: 5px;
+        }
+    </style>
+</head>
+<body>
+    <div class="controls-left">
+        <h2>Calculate Shortest Path</h2>
+        <label for="start">Source:</label>
+        <select id="start">
+            <option value="">Select Node</option>
+            {% for node in intersections %}
+                <option value="{{ node }}">{{ node }}</option>
+            {% endfor %}
+        </select>
+        <label for="end">Destination:</label>
+        <select id="end">
+            <option value="">Select Node</option>
+            {% for node in intersections %}
+                <option value="{{ node }}">{{ node }}</option>
+            {% endfor %}
+        </select>
+        <button id="calculatePath">Calculate Path</button>
+
+        <h2>Simulate Road Closure</h2>
+        <label for="node1">Node 1:</label>
+        <select id="node1">
+            <option value="">Select Node</option>
+            {% for node in intersections %}
+                <option value="{{ node }}">{{ node }}</option>
+            {% endfor %}
+        </select>
+        <label for="node2">Node 2:</label>
+        <select id="node2">
+            <option value="">Select Node</option>
+            {% for node in intersections %}
+                <option value="{{ node }}">{{ node }}</option>
+            {% endfor %}
+        </select>
+        <button id="closeRoad">Close Selected Road</button>
+
+        <h2>Check Edge Weight</h2>
+        <label for="checkNode1">Node 1:</label>
+        <select id="checkNode1">
+            <option value="">Select Node</option>
+            {% for node in intersections %}
+                <option value="{{ node }}">{{ node }}</option>
+            {% endfor %}
+        </select>
+        <label for="checkNode2">Node 2:</label>
+        <select id="checkNode2">
+            <option value="">Select Node</option>
+            {% for node in intersections %}
+                <option value="{{ node }}">{{ node }}</option>
+            {% endfor %}
+        </select>
+        <button id="checkEdgeWeight">Check Edge Weight</button>
+
+        <h2>Add New Node</h2>
+        <label for="newNodeId">New Node ID:</label>
+        <input type="text" id="newNodeId" placeholder="Enter Node ID">
+        <button id="addNode">Add Node</button>
+
+        <h2>Remove Node</h2>
+        <label for="removeNodeId">Node to Remove:</label>
+        <select id="removeNodeId">
+            <option value="">Select Node</option>
+            {% for node in intersections %}
+                <option value="{{ node }}">{{ node }}</option>
+            {% endfor %}
+        </select>
+        <button id="removeNode">Remove Node</button>
+
+        <div id="pathResult"></div>
+        <div id="message"></div>
+    </div>
+    <div class="graph">
+        <div id="graph"></div>
+    </div>
+    <div class="controls-right">
+        <h2>Add New Edge</h2>
+        <label for="edgeNode1">Node 1:</label>
+        <select id="edgeNode1">
+            <option value="">Select Node</option>
+            {% for node in intersections %}
+                <option value="{{ node }}">{{ node }}</option>
+            {% endfor %}
+        </select>
+        <label for="edgeNode2">Node 2:</label>
+        <select id="edgeNode2">
+            <option value="">Select Node</option>
+            {% for node in intersections %}
+                <option value="{{ node }}">{{ node }}</option>
+            {% endfor %}
+        </select>
+        <label for="edgeWeight">Weight:</label>
+        <input type="number" id="edgeWeight" min="1" value="5">
+        <label for="edgeCongestion">Congestion Level (0-3):</label>
+        <input type="number" id="edgeCongestion" min="0" max="3" step="0.1" value="1.0">
+        <button id="addEdge">Add Edge</button>
+
+        <h2>Change Edge Weight</h2>
+        <label for="weightNode1">Node 1:</label>
+        <select id="weightNode1">
+            <option value="">Select Node</option>
+            {% for node in intersections %}
+                <option value="{{ node }}">{{ node }}</option>
+            {% endfor %}
+        </select>
+        <label for="weightNode2">Node 2:</label>
+        <select id="weightNode2">
+            <option value="">Select Node</option>
+            {% for node in intersections %}
+                <option value="{{ node }}">{{ node }}</option>
+            {% endfor %}
+        </select>
+        <label for="weight">Weight:</label>
+        <input type="number" id="weight" min="1">
+        <button id="updateWeight">Update Weight</button>
+
+        <button id="toggleLabels">Toggle Detailed Labels</button>
+    </div>
+
+    <script>
+        const graphDiv = document.getElementById('graph');
+        const initialGraph = {{ graph_json | safe }};
+        console.log("Initial Graph Data:", initialGraph);
+
+        if (typeof Plotly === 'undefined') {
+            console.error("Plotly library failed to load.");
+        } else if (!initialGraph || !initialGraph.data || !initialGraph.layout) {
+            console.error("Invalid initial graph data:", initialGraph);
+        } else {
+            const ensureGraphSize = () => {
+                const rect = graphDiv.getBoundingClientRect();
+                if (rect.width === 0 || rect.height === 0) {
+                    console.warn("Graph container has zero size. Retrying...");
+                    setTimeout(ensureGraphSize, 100);
+                    return;
+                }
+                initialGraph.layout.autosize = true;
+                initialGraph.layout.margin = { t: 50, l: 0, r: 0, b: 0 };
+                Plotly.newPlot(graphDiv, initialGraph.data, initialGraph.layout)
+                    .then(() => console.log("Initial graph rendered successfully"))
+                    .catch(err => console.error("Error rendering initial graph:", err));
+            };
+            ensureGraphSize();
+        }
+
+        function updateGraph(graphJson) {
+            if (!graphJson || !graphJson.data || !graphJson.layout) {
+                console.error("Invalid graph data for update:", graphJson);
+                return false;
+            }
+            console.log("Updating graph with", graphJson.data.length, "traces");
+            graphJson.layout.autosize = true;
+            graphJson.layout.margin = { t: 50, l: 0, r: 0, b: 0 };
+            return Plotly.react(graphDiv, graphJson.data, graphJson.layout)
+                .then(() => {
+                    console.log("Graph updated successfully");
+                    return true;
+                })
+                .catch(err => {
+                    console.error("Error updating graph:", err);
+                    return false;
+                });
+        }
+
+        window.addEventListener('resize', () => {
+            if (initialGraph && initialGraph.data && initialGraph.layout) {
+                initialGraph.layout.autosize = true;
+                Plotly.relayout(graphDiv, initialGraph.layout)
+                    .catch(err => console.error("Error resizing graph:", err));
+            }
+        });
+
+        function scheduleTrafficUpdate() {
+            $.ajax({
+                url: '/update_traffic',
+                type: 'POST',
+                success: function(response) {
+                    console.log("Traffic update response:", response);
+                    if (response.error) {
+                        console.error("Traffic update error:", response.error);
+                    } else {
+                        updateGraph(JSON.parse(response.graph_json));
+                    }
+                },
+                error: function(xhr, status, error) {
+                    console.error('Error updating traffic:', { status: status, error: error, response: xhr.responseText });
+                }
+            });
+        }
+
+        // Schedule traffic updates every 10 seconds
+        setInterval(scheduleTrafficUpdate, 10000);
+        // Initial traffic update after page load
+        setTimeout(scheduleTrafficUpdate, 1000);
+
+        function updateNodeDropdowns(nodes) {
+            const dropdowns = ['start', 'end', 'node1', 'node2', 'edgeNode1', 'edgeNode2', 'weightNode1', 'weightNode2', 'checkNode1', 'checkNode2', 'removeNodeId'];
+            dropdowns.forEach(dropdownId => {
+                const dropdown = $('#' + dropdownId);
+                const currentValue = dropdown.val();
+                dropdown.empty();
+                dropdown.append('<option value="">Select Node</option>');
+                nodes.forEach(node => {
+                    dropdown.append(`<option value="${node}">${node}</option>`);
+                });
+                if (currentValue && nodes.includes(currentValue)) {
+                    dropdown.val(currentValue);
+                } else {
+                    dropdown.val('');
+                }
+            });
+            console.log("Dropdowns updated with nodes:", nodes);
+        }
+
+        function fetchNodesAndUpdateDropdowns() {
+            $.ajax({
+                url: '/get_nodes',
+                type: 'GET',
+                success: function(response) {
+                    console.log("Fetch nodes response:", response);
+                    const nodes = response.nodes || [];
+                    updateNodeDropdowns(nodes);
+                },
+                error: function(xhr, status, error) {
+                    console.error('Error fetching nodes:', { status: status, error: error, response: xhr.responseText });
+                }
+            });
+        }
+
+        $('#calculatePath').click(function() {
+            const start = $('#start').val();
+            const end = $('#end').val();
+            $.ajax({
+                url: '/calculate_path',
+                type: 'POST',
+                data: { start: start, end: end },
+                success: function(response) {
+                    console.log("Calculate path response:", response);
+                    if (response.error) {
+                        $('#pathResult').text(response.error);
+                        $('#message').text('');
+                    } else {
+                        $('#pathResult').text('Shortest Path: ' + response.path + '\nTotal Travel Time: ' + response.travel_time);
+                        $('#message').text(response.message || '');
+                        updateGraph(JSON.parse(response.graph_json));
+                    }
+                },
+                error: function(xhr, status, error) {
+                    console.error('Error calculating path:', { status: status, error: error, response: xhr.responseText });
+                    $('#message').text('Failed to calculate path. Check console for details.');
+                }
+            });
+        });
+
+        $('#closeRoad').click(function() {
+            const node1 = $('#node1').val();
+            const node2 = $('#node2').val();
+            const start = $('#start').val();
+            const end = $('#end').val();
+            $.ajax({
+                url: '/close_road',
+                type: 'POST',
+                data: { node1: node1, node2: node2, start: start, end: end },
+                success: function(response) {
+                    console.log("Close road response:", response);
+                    if (response.error) {
+                        $('#message').text(response.error);
+                    } else {
+                        $('#message').text(response.message);
+                        if (response.path) {
+                            $('#pathResult').text('Shortest Path: ' + response.path + '\nTotal Travel Time: ' + response.travel_time);
+                        }
+                        updateGraph(JSON.parse(response.graph_json));
+                    }
+                },
+                error: function(xhr, status, error) {
+                    console.error('Error closing road:', { status: status, error: error, response: xhr.responseText });
+                    $('#message').text('Failed to close road. Check console for details.');
+                }
+            });
+        });
+
+        $('#addNode').click(function() {
+            const newNodeId = $('#newNodeId').val().trim();
+            if (!newNodeId) {
+                $('#message').text('Please enter a valid node ID.');
+                return;
+            }
+            $.ajax({
+                url: '/add_node',
+                type: 'POST',
+                data: { new_node_id: newNodeId },
+                success: function(response) {
+                    console.log("Add node response:", response);
+                    if (response.error) {
+                        $('#message').text(response.error);
+                    } else {
+                        $('#message').text(response.message);
+                        updateGraph(JSON.parse(response.graph_json));
+                        fetchNodesAndUpdateDropdowns();
+                        $('#newNodeId').val('');
+                    }
+                },
+                error: function(xhr, status, error) {
+                    console.error('Error adding node:', { status: status, error: error, response: xhr.responseText });
+                    $('#message').text('Failed to add node. Check console for details.');
+                }
+            });
+        });
+
+        $('#removeNode').click(function() {
+            const nodeId = $('#removeNodeId').val().trim();
+            console.log("Attempting to remove node:", nodeId);
+            if (!nodeId) {
+                $('#message').text('Please select a valid node to remove.');
+                console.warn("No valid node selected for removal");
+                return;
+            }
+            $.ajax({
+                url: '/remove_node',
+                type: 'POST',
+                data: { node_id: nodeId },
+                success: function(response) {
+                    console.log("Remove node response:", response);
+                    if (response.error) {
+                        $('#message').text(response.error);
+                        console.warn("Server returned error:", response.error);
+                    } else {
+                        $('#message').text(response.message);
+                        const graphUpdated = updateGraph(JSON.parse(response.graph_json));
+                        if (graphUpdated) {
+                            updateNodeDropdowns(response.nodes);
+                        } else {
+                            $('#message').text('Node removed, but failed to update graph. Check console for details.');
+                        }
+                    }
+                },
+                error: function(xhr, status, error) {
+                    console.error('Error removing node:', { status: status, error: error, response: xhr.responseText });
+                    $('#message').text('Failed to remove node: ' + (xhr.responseJSON?.error || 'Unknown error. Check console for details.'));
+                }
+            });
+        });
+
+        $('#addEdge').click(function() {
+            const node1 = $('#edgeNode1').val();
+            const node2 = $('#edgeNode2').val();
+            const weight = $('#edgeWeight').val();
+            const traffic = $('#edgeCongestion').val();
+            $.ajax({
+                url: '/add_edge',
+                type: 'POST',
+                data: { node1: node1, node2: node2, weight: weight, traffic: traffic },
+                success: function(response) {
+                    console.log("Add edge response:", response);
+                    if (response.error) {
+                        $('#message').text(response.error);
+                    } else {
+                        $('#message').text(response.message);
+                        updateGraph(JSON.parse(response.graph_json));
+                    }
+                },
+                error: function(xhr, status, error) {
+                    console.error('Error adding edge:', { status: status, error: error, response: xhr.responseText });
+                    $('#message').text('Failed to add edge. Check console for details.');
+                }
+            });
+        });
+
+        $('#checkEdgeWeight').click(function() {
+            const node1 = $('#checkNode1').val();
+            const node2 = $('#checkNode2').val();
+            $.ajax({
+                url: '/check_edge_weight',
+                type: 'POST',
+                data: { node1: node1, node2: node2 },
+                success: function(response) {
+                    console.log("Check edge weight response:", response);
+                    if (response.error) {
+                        $('#message').text(response.error);
+                    } else {
+                        $('#message').text(`Edge ${node1}-${node2}: Weight=${response.weight}, Congestion Level=${response.traffic}`);
+                    }
+                },
+                error: function(xhr, status, error) {
+                    console.error('Error checking edge weight:', { status: status, error: error, response: xhr.responseText });
+                    $('#message').text('Failed to check edge weight. Check console for details.');
+                }
+            });
+        });
+
+        $('#updateWeight').click(function() {
+            const node1 = $('#weightNode1').val();
+            const node2 = $('#weightNode2').val();
+            const weight = $('#weight').val();
+            const start = $('#start').val();
+            const end = $('#end').val();
+            $.ajax({
+                url: '/change_weight',
+                type: 'POST',
+                data: { node1: node1, node2: node2, weight: weight, start: start, end: end },
+                success: function(response) {
+                    console.log("Update weight response:", response);
+                    if (response.error) {
+                        $('#message').text(response.error);
+                    } else {
+                        $('#message').text(response.message);
+                        if (response.path) {
+                            $('#pathResult').text('Shortest Path: ' + response.path + '\nTotal Travel Time: ' + response.travel_time);
+                        }
+                        updateGraph(JSON.parse(response.graph_json));
+                    }
+                },
+                error: function(xhr, status, error) {
+                    console.error('Error updating weight:', { status: status, error: error, response: xhr.responseText });
+                    $('#message').text('Failed to update weight. Check console for details.');
+                }
+            });
+        });
+
+        $('#toggleLabels').click(function() {
+            $.ajax({
+                url: '/toggle_labels',
+                type: 'POST',
+                success: function(response) {
+                    console.log("Toggle labels response:", response);
+                    if (response.error) {
+                        $('#message').text(response.error);
+                    } else {
+                        $('#message').text(response.message);
+                        updateGraph(JSON.parse(response.graph_json));
+                    }
+                },
+                error: function(xhr, status, error) {
+                    console.error('Error toggling labels:', { status: status, error: error, response: xhr.responseText });
+                    $('#message').text('Failed to toggle labels. Check console for details.');
+                }
+            });
+        });
+
+        graphDiv.on('plotly_click', function(data) {
+            for (let i = 0; i < data.points.length; i++) {
+                const point = data.points[i];
+                if (point.data.name === 'Intersections') {
+                    const node = point.text;
+                    if (!$('#start').val()) {
+                        $('#start').val(node);
+                    } else if (!$('#end').val()) {
+                        $('#end').val(node);
+                    } else {
+                        $('#start').val(node);
+                        $('#end').val('');
+                    }
+                    break;
+                }
+            }
+        });
+    </script>
+</body>
+</html>
